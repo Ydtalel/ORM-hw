@@ -3,45 +3,24 @@ import sqlalchemy
 from sqlalchemy.orm import sessionmaker
 from dotenv import load_dotenv
 import os
-import models
 
 from models import *
 
 
 def json_to_tables():
-    with open('data.json', encoding='utf-8') as f:
-        data = json.load(f)
-        list_of_models = []
-        for d in data:
-            model = d['model']
-            if model == 'publisher':
-                name = d['fields']['name']
-                publisher = models.Publisher(name=name)
-                list_of_models.append(publisher)
-            elif model == "book":
-                title = d['fields']['title']
-                id_publisher = d['fields']['id_publisher']
-                book = Book(title=title, id_publisher=id_publisher)
-                list_of_models.append(book)
-            elif model == "shop":
-                name = d['fields']['name']
-                shop = models.Shop(name=name)
-                list_of_models.append(shop)
-            elif model == "stock":
-                id_shop = d['fields']['id_shop']
-                id_book = d['fields']['id_book']
-                count = d['fields']['count']
-                stock = Stock(id_shop=id_shop, id_book=id_book, count=count)
-                list_of_models.append(stock)
-            elif model == "sale":
-                price = d['fields']['price']
-                date_sale = d['fields']['date_sale']
-                count = d['fields']['count']
-                id_stock = d['fields']['id_stock']
-                sale = Sale(price=price, date_sale=date_sale, count=count, id_stock=id_stock)
-                list_of_models.append(sale)
-        session.add_all(list_of_models)
-        session.commit()
+    with open('data.json', 'r') as fd:
+        data = json.load(fd)
+
+    for record in data:
+        model = {
+            'publisher': Publisher,
+            'shop': Shop,
+            'book': Book,
+            'stock': Stock,
+            'sale': Sale,
+        }[record.get('model')]
+        session.add(model(id=record.get('pk'), **record.get('fields')))
+    session.commit()
 
 
 def find_shop_by_publisher(publisher_name):
@@ -56,16 +35,15 @@ def find_shop_by_publisher(publisher_name):
 
 
 def find_sales_information(publisher_=None, id_=None):
-    filter_ = ''
     if id_:
         filter_ = Book.id_publisher == id_
     elif publisher_:
         filter_ = Publisher.name == publisher_
-    q = session.query(Publisher, Book, Stock, Shop, Sale, ).join(Sale.stock).join(Stock.shop).join(Stock.book).join(
-        Book.publisher).filter(filter_)
-    for el in q:
-        for item in el:
-            print(item)
+    res = session.query(Book.title, Shop.name, Sale.price, Sale.count, Sale.date_sale). \
+        join(Publisher).join(Stock).join(Sale).join(Shop).filter(filter_)
+
+    for book, shop, price, count, date in res:
+        print(f'{book: <40} | {shop: <10} | {price * count: <8} | {date}')
 
 
 load_dotenv()  # take environment variables from .env.
@@ -92,6 +70,7 @@ json_to_tables()  # Заполняем БД тестовыми данными и
 #     print(item)
 # for item in session.query(Sale):
 #     print(item)
+
 publisher_name = input('Введите имя издателя: ')
 find_shop_by_publisher(publisher_name=publisher_name)  # запрос выборки магазинов, продающих целевого издателя
 data = input('Введите имя или идентификатор издателя: ')
